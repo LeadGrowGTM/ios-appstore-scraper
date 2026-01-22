@@ -1,14 +1,13 @@
 # iOS App Store Scraper
 
-A Python library and CLI tool for extracting app data from the iOS App Store using Apple's iTunes Search API and RSS feeds.
+A Python library and CLI tool for extracting app data from the iOS App Store. Scrape any category, search any keyword, and export to CSV or Excel.
 
-**Features:**
-- Search apps by keyword
-- Scrape top apps from any category
-- Get detailed app information (25+ fields)
-- Fetch user reviews
-- Filter games by keywords (single-player, Unity, etc.)
-- Export to CSV or Excel
+**What you can scrape:**
+- Any app category (Health, Finance, Productivity, Games, etc.)
+- Any search keyword
+- Any specific app by ID
+- Any developer's full app portfolio
+- User reviews
 
 ## Installation
 
@@ -19,122 +18,145 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # 2. Install dependencies
 pip install -r requirements.txt
-
-# 3. Install package
-pip install -e .
 ```
 
-## Usage
-
-### Command Line
+## Quick Start
 
 ```bash
-# Search for apps
-appstore search "fitness tracker" --limit 50 --output results.csv
+# Search any keyword
+python -m app_store_scraper.cli search "fitness" --limit 50 --output fitness_apps.csv
+python -m app_store_scraper.cli search "meditation" --limit 100 --output meditation.xlsx
 
-# Get apps from a category (by ID or name)
-appstore category 6027 --limit 100 --output health.xlsx
-appstore category "Health & Fitness" --limit 100
+# Scrape any category
+python -m app_store_scraper.cli category "Health & Fitness" --limit 100 --output health.csv
+python -m app_store_scraper.cli category "Finance" --limit 50 --output finance.csv
+python -m app_store_scraper.cli category "Productivity" --limit 100 --output productivity.xlsx
 
-# Get app details
-appstore app 333903271 --reviews
+# Get any app's details
+python -m app_store_scraper.cli app 333903271 --reviews --output app_details.xlsx
 
-# Get all apps by a developer
-appstore developer 389801252 --output apps.csv
+# Get all apps from a developer
+python -m app_store_scraper.cli developer 389801252 --output developer_apps.csv
 
-# List available categories
-appstore categories --games
-
-# Scrape all categories at once
-appstore all-categories --limit 50 --output all_apps.xlsx
+# List all categories
+python -m app_store_scraper.cli categories --games
 ```
 
-### Single-Player Game Finder (Keyword Filtering)
+## Building Custom Scrapers
 
-Find single-player/offline games using keyword filtering on app descriptions:
+The real power is building your own scraping logic. Here's how:
 
-```bash
-# Basic: scrape all game categories and filter
-appstore singleplayer-games --output singleplayer.csv
-
-# Extended: also search with 300+ keywords for broader coverage
-appstore singleplayer-games --include-search --output singleplayer.csv
-
-# Filter for Unity-built games only
-appstore singleplayer-games --filter-unity --output unity_games.csv
-
-# Include paid apps and show statistics
-appstore singleplayer-games --include-paid --stats --output all_sp_games.csv
-
-# Combine options
-appstore singleplayer-games --include-search --filter-unity --stats --output unity_sp.csv
-```
-
-**Options:**
-| Option | Description |
-|--------|-------------|
-| `--include-search` | Search with 300+ keywords for more results |
-| `--include-paid` | Include paid apps (default: free only) |
-| `--filter-unity` | Filter for Unity-built games |
-| `--stats` | Show filter statistics |
-| `--collection` | top_free, top_paid, or top_grossing |
-
-### Python Library
+### Basic Python Usage
 
 ```python
 from app_store_scraper import AppStoreScraper, Category, CSVExporter
 
-# Initialize
 scraper = AppStoreScraper(country='us')
 
-# Search
-apps = scraper.search("productivity", limit=20)
+# Search any keyword
+apps = scraper.search("your keyword here", limit=200)
 
-# Get apps by category
-health_apps = scraper.get_apps_by_category(Category.HEALTH_FITNESS, limit=100)
+# Scrape any category
+apps = scraper.get_apps_by_category(Category.HEALTH_FITNESS, limit=100)
+apps = scraper.get_apps_by_category(Category.FINANCE, limit=100)
+apps = scraper.get_apps_by_category(Category.PRODUCTIVITY, limit=100)
 
-# Get app details
-app = scraper.get_app_details(333903271)
-print(f"{app.name} - {app.rating_average}/5")
-
-# Get reviews
-reviews = scraper.get_reviews(333903271, pages=5)
-
-# Export
+# Export results
 CSVExporter.export_apps(apps, "output.csv")
 ```
 
-#### Using Filters in Python
+### Custom Keyword Filtering
+
+Filter apps based on description keywords - find exactly what you need:
 
 ```python
-from app_store_scraper import (
-    AppStoreScraper,
-    GameCategory,
-    SINGLE_PLAYER_FILTER,
-    UNITY_FILTER,
-    apply_filter
-)
+from app_store_scraper import AppStoreScraper, KeywordFilter, apply_filter
 
 scraper = AppStoreScraper()
+apps = scraper.search("your search term", limit=200)
 
-# Get games from a category
-games = scraper.get_apps_by_category(GameCategory.ACTION, limit=200)
+# Create your own filter
+my_filter = KeywordFilter(
+    name="My Custom Filter",
 
-# Filter for single-player games
-result = apply_filter(games, SINGLE_PLAYER_FILTER)
-print(f"Found {result.matched_count} single-player games")
-print(f"Match rate: {result.match_rate:.1f}%")
+    # Apps MUST contain at least one of these in their description
+    include_keywords=[
+        "offline", "no internet", "single player",
+        "your", "keywords", "here"
+    ],
 
-# Chain filters for Unity single-player games
-unity_result = apply_filter(result.filtered_apps, UNITY_FILTER)
-print(f"Found {unity_result.matched_count} Unity single-player games")
+    # Apps must NOT contain any of these (optional)
+    exclude_keywords=[
+        "multiplayer", "online required", "pvp",
+        "words", "to", "exclude"
+    ]
+)
+
+# Apply filter
+result = apply_filter(apps, my_filter)
+print(f"Found {result.matched_count} matching apps")
+
+# Export filtered results
+CSVExporter.export_apps(result.filtered_apps, "filtered_results.csv")
 ```
 
-### Common Options
+### Example: Find Offline Finance Apps
+
+```python
+from app_store_scraper import AppStoreScraper, Category, KeywordFilter, apply_filter, CSVExporter
+
+scraper = AppStoreScraper()
+apps = scraper.get_apps_by_category(Category.FINANCE, limit=200)
+
+offline_filter = KeywordFilter(
+    name="Offline Finance",
+    include_keywords=["offline", "no internet", "works offline", "without wifi"],
+    exclude_keywords=["requires internet", "online only"]
+)
+
+result = apply_filter(apps, offline_filter)
+CSVExporter.export_apps(result.filtered_apps, "offline_finance_apps.csv")
+```
+
+### Example: Find Meditation Apps Without Subscriptions
+
+```python
+scraper = AppStoreScraper()
+apps = scraper.search("meditation", limit=200)
+
+no_subscription_filter = KeywordFilter(
+    name="No Subscription",
+    include_keywords=["free", "one time", "no subscription", "premium unlock"],
+    exclude_keywords=["subscription", "monthly", "yearly", "trial"]
+)
+
+result = apply_filter(apps, no_subscription_filter)
+```
+
+## Available Categories
+
+| ID | Category | ID | Category |
+|----|----------|----|----------|
+| 6000 | Business | 6014 | Games |
+| 6002 | Utilities | 6015 | Finance |
+| 6005 | Social Networking | 6016 | Entertainment |
+| 6007 | Productivity | 6017 | Education |
+| 6008 | Photo & Video | 6020 | Medical |
+| 6012 | Lifestyle | 6023 | Food & Drink |
+| 6013 | Newsstand | 6024 | Shopping |
+| 6027 | Health & Fitness | 6028 | Graphics & Design |
+
+Run `python -m app_store_scraper.cli categories --games` to see all categories including game subcategories.
+
+## Data Fields Exported
+
+Each app includes: `name`, `app_id`, `developer`, `rating`, `reviews_count`, `price`, `description`, `release_date`, `version`, `size`, `category`, `developer_website`, `app_store_url`, and more.
+
+## Options
 
 | Option | Description |
 |--------|-------------|
-| `-l, --limit` | Max results (default varies, max 200) |
-| `-c, --country` | Country code (default: us) |
+| `-l, --limit` | Max results (up to 200) |
+| `-c, --country` | Country code (us, gb, de, jp, etc.) |
 | `-o, --output` | Output file (.csv or .xlsx) |
-| `-v, --verbose` | Verbose output |
+| `-v, --verbose` | Show detailed progress |
