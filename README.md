@@ -1,13 +1,14 @@
 # iOS App Store Scraper
 
-A Python library and CLI tool for extracting app data from the iOS App Store. Scrape any category, search any keyword, and export to CSV or Excel.
+A Python library and CLI tool for extracting app data from the iOS App Store. Scrape **any category** - health apps, finance apps, games, productivity tools, and more.
 
-**What you can scrape:**
-- Any app category (Health, Finance, Productivity, Games, etc.)
-- Any search keyword
-- Any specific app by ID
-- Any developer's full app portfolio
-- User reviews
+**Features:**
+- Search apps by keyword
+- Scrape top apps from **any** of 24 categories + 18 game subcategories
+- Get detailed app information (25+ fields including developer website)
+- Fetch user reviews
+- Build custom filters with keyword matching
+- Export to CSV or Excel
 
 ## Installation
 
@@ -18,145 +19,167 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Install package (enables CLI commands)
+pip install -e .
 ```
 
-## Quick Start
+## Usage
+
+### Command Line
 
 ```bash
-# Search any keyword
-python -m app_store_scraper.cli search "fitness" --limit 50 --output fitness_apps.csv
-python -m app_store_scraper.cli search "meditation" --limit 100 --output meditation.xlsx
+# Search for apps
+appstore search "fitness tracker" --limit 50 --output results.csv
 
-# Scrape any category
-python -m app_store_scraper.cli category "Health & Fitness" --limit 100 --output health.csv
-python -m app_store_scraper.cli category "Finance" --limit 50 --output finance.csv
-python -m app_store_scraper.cli category "Productivity" --limit 100 --output productivity.xlsx
+# Get apps from ANY category (by ID or name)
+appstore category 6027 --limit 100 --output health_apps.xlsx
+appstore category "Finance" --limit 100 --output finance_apps.csv
+appstore category "Productivity" --limit 50
 
-# Get any app's details
-python -m app_store_scraper.cli app 333903271 --reviews --output app_details.xlsx
+# Get app details
+appstore app 333903271 --reviews
 
-# Get all apps from a developer
-python -m app_store_scraper.cli developer 389801252 --output developer_apps.csv
+# Get all apps by a developer
+appstore developer 389801252 --output apps.csv
 
-# List all categories
-python -m app_store_scraper.cli categories --games
+# List all available categories
+appstore categories --games
+
+# Scrape ALL categories at once
+appstore all-categories --limit 50 --output all_apps.xlsx
 ```
+
+### Category IDs
+
+| ID | Category | ID | Category |
+|----|----------|----|----------|
+| 6000 | Business | 6015 | Finance |
+| 6002 | Utilities | 6016 | Entertainment |
+| 6007 | Productivity | 6017 | Education |
+| 6008 | Photo & Video | 6023 | Food & Drink |
+| 6012 | Lifestyle | 6024 | Shopping |
+| 6014 | Games | 6027 | Health & Fitness |
+
+Run `appstore categories --games` to see all 42 categories.
 
 ## Building Custom Scrapers
 
 The real power is building your own scraping logic. Here's how:
 
-### Basic Python Usage
+### Basic: Scrape Any Category
 
 ```python
 from app_store_scraper import AppStoreScraper, Category, CSVExporter
 
 scraper = AppStoreScraper(country='us')
 
-# Search any keyword
-apps = scraper.search("your keyword here", limit=200)
+# Scrape health & fitness apps
+health_apps = scraper.get_apps_by_category(Category.HEALTH_FITNESS, limit=200)
 
-# Scrape any category
-apps = scraper.get_apps_by_category(Category.HEALTH_FITNESS, limit=100)
-apps = scraper.get_apps_by_category(Category.FINANCE, limit=100)
-apps = scraper.get_apps_by_category(Category.PRODUCTIVITY, limit=100)
+# Scrape finance apps
+finance_apps = scraper.get_apps_by_category(Category.FINANCE, limit=200)
 
-# Export results
-CSVExporter.export_apps(apps, "output.csv")
+# Search by keyword
+meditation_apps = scraper.search("meditation", limit=100)
+
+# Export
+CSVExporter.export_apps(health_apps, "health_apps.csv")
 ```
 
-### Custom Keyword Filtering
+### Advanced: Custom Keyword Filters
 
-Filter apps based on description keywords - find exactly what you need:
+Build filters to find specific types of apps:
 
 ```python
-from app_store_scraper import AppStoreScraper, KeywordFilter, apply_filter
+from app_store_scraper import AppStoreScraper, Category, KeywordFilter, apply_filter
 
-scraper = AppStoreScraper()
-apps = scraper.search("your search term", limit=200)
-
-# Create your own filter
-my_filter = KeywordFilter(
+# Define your own filter
+MY_FILTER = KeywordFilter(
     name="My Custom Filter",
-
-    # Apps MUST contain at least one of these in their description
+    # Apps MUST contain at least one of these in description
     include_keywords=[
-        "offline", "no internet", "single player",
-        "your", "keywords", "here"
+        "meditation", "mindfulness", "calm", "relaxation",
+        "sleep", "breathing", "stress relief"
     ],
-
-    # Apps must NOT contain any of these (optional)
+    # Apps with these keywords are EXCLUDED
     exclude_keywords=[
-        "multiplayer", "online required", "pvp",
-        "words", "to", "exclude"
+        "game", "casino", "betting", "workout", "exercise"
     ]
 )
 
-# Apply filter
-result = apply_filter(apps, my_filter)
-print(f"Found {result.matched_count} matching apps")
+# Scrape and filter
+scraper = AppStoreScraper()
+apps = scraper.get_apps_by_category(Category.HEALTH_FITNESS, limit=200)
+
+result = apply_filter(apps, MY_FILTER)
+print(f"Found {result.matched_count} meditation/relaxation apps")
+print(f"Match rate: {result.match_rate:.1f}%")
 
 # Export filtered results
-CSVExporter.export_apps(result.filtered_apps, "filtered_results.csv")
+CSVExporter.export_apps(result.filtered_apps, "meditation_apps.csv")
 ```
 
-### Example: Find Offline Finance Apps
+### Example: Find B2B SaaS Apps
 
 ```python
-from app_store_scraper import AppStoreScraper, Category, KeywordFilter, apply_filter, CSVExporter
-
-scraper = AppStoreScraper()
-apps = scraper.get_apps_by_category(Category.FINANCE, limit=200)
-
-offline_filter = KeywordFilter(
-    name="Offline Finance",
-    include_keywords=["offline", "no internet", "works offline", "without wifi"],
-    exclude_keywords=["requires internet", "online only"]
+B2B_FILTER = KeywordFilter(
+    name="B2B SaaS",
+    include_keywords=[
+        "enterprise", "business", "team", "collaboration",
+        "workflow", "productivity", "crm", "project management",
+        "analytics", "dashboard", "reporting"
+    ],
+    exclude_keywords=[
+        "game", "personal", "family", "kids", "photo editor"
+    ]
 )
 
-result = apply_filter(apps, offline_filter)
-CSVExporter.export_apps(result.filtered_apps, "offline_finance_apps.csv")
+apps = scraper.get_apps_by_category(Category.BUSINESS, limit=200)
+result = apply_filter(apps, B2B_FILTER)
 ```
 
-### Example: Find Meditation Apps Without Subscriptions
+### Example: Find Subscription Apps
 
 ```python
-scraper = AppStoreScraper()
-apps = scraper.search("meditation", limit=200)
-
-no_subscription_filter = KeywordFilter(
-    name="No Subscription",
-    include_keywords=["free", "one time", "no subscription", "premium unlock"],
-    exclude_keywords=["subscription", "monthly", "yearly", "trial"]
-)
-
-result = apply_filter(apps, no_subscription_filter)
+# Filter by price model
+subscription_apps = [
+    app for app in apps
+    if "subscription" in app.description.lower()
+    or "premium" in app.description.lower()
+]
 ```
 
-## Available Categories
+## Pre-Built Filters
 
-| ID | Category | ID | Category |
-|----|----------|----|----------|
-| 6000 | Business | 6014 | Games |
-| 6002 | Utilities | 6015 | Finance |
-| 6005 | Social Networking | 6016 | Entertainment |
-| 6007 | Productivity | 6017 | Education |
-| 6008 | Photo & Video | 6020 | Medical |
-| 6012 | Lifestyle | 6023 | Food & Drink |
-| 6013 | Newsstand | 6024 | Shopping |
-| 6027 | Health & Fitness | 6028 | Graphics & Design |
+Two filters are included out of the box:
 
-Run `python -m app_store_scraper.cli categories --games` to see all categories including game subcategories.
+```bash
+# Find single-player/offline games
+appstore singleplayer-games --output singleplayer.csv
 
-## Data Fields Exported
+# With extended search (300+ keywords)
+appstore singleplayer-games --include-search --filter-unity --output unity_games.csv
+```
 
-Each app includes: `name`, `app_id`, `developer`, `rating`, `reviews_count`, `price`, `description`, `release_date`, `version`, `size`, `category`, `developer_website`, `app_store_url`, and more.
+## Data Fields
 
-## Options
+Each app includes 25+ fields:
+- `app_id`, `bundle_id`, `name`
+- `developer_name`, `developer_id`, `developer_website`
+- `price`, `currency`, `is_free`
+- `rating_average`, `rating_count`
+- `primary_genre`, `description`
+- `size_bytes`, `version`, `minimum_os_version`
+- `release_date`, `updated_date`
+- `url`, `icon_url`, `screenshot_urls`
+- And more...
+
+## Common Options
 
 | Option | Description |
 |--------|-------------|
-| `-l, --limit` | Max results (up to 200) |
-| `-c, --country` | Country code (us, gb, de, jp, etc.) |
+| `-l, --limit` | Max results (max 200 per request) |
+| `-c, --country` | Country code (default: us) |
 | `-o, --output` | Output file (.csv or .xlsx) |
-| `-v, --verbose` | Show detailed progress |
+| `-v, --verbose` | Verbose output |
